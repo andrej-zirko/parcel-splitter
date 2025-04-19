@@ -142,7 +142,7 @@ function clipPolygonSutherlandHodgman(subjectPolygon: PixelCoord[], clipBounds: 
 // --- End Sutherland-Hodgman ---
 
 function App() {
-  const [initialSqM, setInitialSqM] = useState<number>(1264); // ~10000 sq ft in sq m
+  const [initialSqM, setInitialSqM] = useState<number>(1000);
   const [initialSqMError, setInitialSqMError] = useState<string>(''); // New state for input error
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string>(''); // New state for image errors
@@ -154,6 +154,7 @@ function App() {
   const [isDefiningPolygon, setIsDefiningPolygon] = useState<boolean>(false); // Mode flag
   const [definedPolygonAreaPixels, setDefinedPolygonAreaPixels] = useState<number | null>(null); // Area in pixels^2
   const [polygonBounds, setPolygonBounds] = useState<Bounds>(null); // Bounds of the defined polygon
+  const [showHowTo, setShowHowTo] = useState<boolean>(false); // State for How-to GIF visibility
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -394,6 +395,10 @@ function App() {
       }
   };
 
+  const toggleHowTo = () => {
+    setShowHowTo(prev => !prev);
+  };
+
   return (
     <div className="App">
       <h1>Parcel Splitter</h1>
@@ -415,7 +420,25 @@ function App() {
           <input type="file" accept="image/*" onChange={handleFileChange} />
         </label>
         {imageError && <p style={{ color: 'red', fontSize: '0.8em' }}>{imageError}</p>}
+        <button onClick={toggleHowTo} style={{ marginLeft: '10px', padding: '5px 10px' }}>
+          {showHowTo ? 'Hide How-to Guide' : 'Show How-to Guide'}
+        </button>
       </div>
+
+      {showHowTo && (
+        <div className="how-to-guide" style={{ margin: '20px 0', padding: '10px', border: '1px dashed #ccc', textAlign: 'center' }}>
+          <h3>How to Use:</h3>
+          <img
+            src="/how-to.gif" // Assuming the GIF is in the public folder
+            alt="How-to guide animation"
+            style={{ maxWidth: '100%', maxHeight: '400px', border: '1px solid #eee' }}
+          />
+          <p style={{ fontSize: '0.9em', marginTop: '10px' }}>
+            1. Enter the total area (sq m). 2. Upload an image. 3. Define the polygon area. 4. Choose split direction. 5. Click inside the polygon to split.
+          </p>
+        </div>
+      )}
+
       <div className="controls polygon-controls">
         <button onClick={handleStartDefining} disabled={!imageSrc || isDefiningPolygon}>
           Start/Add Point
