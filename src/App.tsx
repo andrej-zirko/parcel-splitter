@@ -49,18 +49,6 @@ const isPointInPolygon = (point: PixelCoord, polygon: PixelCoord[]): boolean => 
   return isInside;
 };
 
-// Calculate the bounding box of a polygon
-const getPolygonBounds = (polygon: PixelCoord[]): Bounds => {
-    if (polygon.length === 0) return null;
-    let minX = polygon[0].x, minY = polygon[0].y, maxX = polygon[0].x, maxY = polygon[0].y;
-    for (let i = 1; i < polygon.length; i++) {
-        if (polygon[i].x < minX) minX = polygon[i].x;
-        if (polygon[i].x > maxX) maxX = polygon[i].x;
-        if (polygon[i].y < minY) minY = polygon[i].y;
-        if (polygon[i].y > maxY) maxY = polygon[i].y;
-    }
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-};
 
 // --- Sutherland-Hodgman Polygon Clipping ---
 
