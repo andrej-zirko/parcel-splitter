@@ -402,6 +402,9 @@ function App() {
   return (
     <div className="App">
       <h1>Parcel Splitter</h1>
+      <p style={{ maxWidth: '800px', margin: '10px auto 20px auto', color: '#333' }}>
+        Easily visualize splitting a defined land parcel (polygon) into two sections. Simply upload an image, define the parcel boundaries, choose a split direction (vertical or horizontal), and click inside the defined area to instantly see the calculated square meters for each resulting section based on your initial total area input.
+      </p>
       <div className="controls">
         <label>
           Initial Square Meters (of defined area):
