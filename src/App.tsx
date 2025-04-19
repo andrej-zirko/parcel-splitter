@@ -1,4 +1,4 @@
-import React, { useState, useRef, MouseEvent, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, MouseEvent, useCallback, useMemo } from 'react';
 import './App.css';
 
 // Define types
@@ -153,7 +153,6 @@ function App() {
   const [polygonPoints, setPolygonPoints] = useState<PixelCoord[]>([]); // User-defined vertices
   const [isDefiningPolygon, setIsDefiningPolygon] = useState<boolean>(false); // Mode flag
   const [definedPolygonAreaPixels, setDefinedPolygonAreaPixels] = useState<number | null>(null); // Area in pixels^2
-  const [polygonBounds, setPolygonBounds] = useState<Bounds>(null); // Bounds of the defined polygon
   const [showHowTo, setShowHowTo] = useState<boolean>(false); // State for How-to GIF visibility
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
@@ -166,7 +165,6 @@ function App() {
     setSplitNaturalX(null);
     setSplitNaturalY(null);
     setDefinedPolygonAreaPixels(null);
-    setPolygonBounds(null);
   };
 
   const handleFinishDefining = () => {
@@ -174,11 +172,9 @@ function App() {
     if (polygonPoints.length >= 3) {
       const area = calculatePolygonArea(polygonPoints);
       setDefinedPolygonAreaPixels(area);
-      setPolygonBounds(getPolygonBounds(polygonPoints));
     } else {
       setPolygonPoints([]);
       setDefinedPolygonAreaPixels(null);
-      setPolygonBounds(null);
     }
   };
 
@@ -188,7 +184,6 @@ function App() {
     setSplitNaturalX(null);
     setSplitNaturalY(null);
     setDefinedPolygonAreaPixels(null);
-    setPolygonBounds(null);
   };
 
   const handleUndoPoint = () => {
@@ -196,7 +191,6 @@ function App() {
       setPolygonPoints(prevPoints => prevPoints.slice(0, -1));
       if (polygonPoints.length <= 3) {
         setDefinedPolygonAreaPixels(null);
-        setPolygonBounds(null);
       }
     }
   };
