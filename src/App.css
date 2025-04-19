@@ -33,6 +33,9 @@
   padding: 0.5em;
   border: 1px solid #ccc;
   border-radius: 4px;
+  width: 90%; /* Make inputs take more width */
+  max-width: 250px; /* But not excessively wide */
+  box-sizing: border-box; /* Include padding in width */
 }
 
 .image-container {
@@ -79,3 +82,69 @@
   text-align: center;
   color: #ffffff;
 }
+
+/* --- Add Media Query for Mobile --- */
+@media (max-width: 768px) {
+  #root {
+    padding: 1rem; /* Reduce padding on smaller screens */
+  }
+
+  .App {
+    gap: 1.5rem; /* Increase gap slightly */
+  }
+
+  .controls {
+    gap: 15px; /* Adjust gap */
+  }
+
+  .controls label {
+    font-size: 1.1em; /* Larger label text */
+    width: 100%; /* Make labels take full width */
+    align-items: center; /* Center label content */
+  }
+
+  .controls input[type="number"],
+  .controls input[type="file"] {
+    padding: 0.8em; /* Larger input padding */
+    font-size: 1em; /* Ensure input font size is adequate */
+    max-width: 100%; /* Allow inputs to take full width if needed */
+  }
+
+  .image-container {
+    max-height: 50vh; /* Adjust max height for smaller screens */
+    flex-basis: 100%; /* Make image container take full width */
+  }
+
+  .parcel-image {
+     max-height: 50vh; /* Match container */
+  }
+
+  .results {
+    margin-top: 15px;
+    padding: 1.2em; /* More padding */
+    flex-basis: 100%; /* Make results take full width */
+  }
+
+  .results h2 {
+    font-size: 1.5em; /* Larger results header */
+  }
+
+  .results p {
+    font-size: 1.1em; /* Larger results text */
+  }
+
+  /* Increase size of SVG elements for better visibility/touch */
+  .parcel-image + svg circle {
+    r: 5; /* Larger points */
+  }
+
+  .parcel-image + svg polygon,
+  .parcel-image + svg line {
+    stroke-width: 3; /* Thicker lines */
+  }
+
+  .parcel-image + svg line[stroke-dasharray] {
+    stroke-width: 2; /* Adjust dashed line thickness */
+  }
+}
+/* --- End Media Query --- */
