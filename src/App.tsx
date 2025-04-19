@@ -496,13 +496,22 @@ function App() {
           </div>
         )}
 
-        {/* Results display moved to the right */}
-        {isSplitActive && definedPolygonAreaPixels !== null && polygonPoints.length >= 3 && (
+        {/* Results display: Show when polygon is defined */}
+        {polygonPoints.length >= 3 && !isDefiningPolygon && (
           <div className="results" style={{ minWidth: '200px', padding: '10px' }}>
-            <h2>Split Results ({splitDirection})</h2>
-            <p>{label1}: {area1.toFixed(2)} sq m ({((area1 / initialSqM) * 100).toFixed(1)}%)</p>
-            <p>{label2}: {area2.toFixed(2)} sq m ({((area2 / initialSqM) * 100).toFixed(1)}%)</p>
-            <p>(Total Defined Area: {initialSqM.toFixed(2)} sq m)</p>
+            <h2>{isSplitActive ? `Split Results (${splitDirection})` : 'Area Information'}</h2>
+            {isSplitActive ? (
+              <>
+                <p>{label1}: {area1.toFixed(2)} sq m ({initialSqM > 0 ? ((area1 / initialSqM) * 100).toFixed(1) : 0}%)</p>
+                <p>{label2}: {area2.toFixed(2)} sq m ({initialSqM > 0 ? ((area2 / initialSqM) * 100).toFixed(1) : 0}%)</p>
+              </>
+            ) : (
+              <p>No split defined yet. Click inside the polygon to create a split.</p>
+            )}
+            <p>Total Defined Area: {initialSqM.toFixed(2)} sq m</p>
+            {definedPolygonAreaPixels !== null && (
+                 <p style={{fontSize: '0.8em', color: '#666'}}>(Polygon Area in Pixels: {definedPolygonAreaPixels.toFixed(0)})</p>
+            )}
           </div>
         )}
       </div>
