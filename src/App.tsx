@@ -1,4 +1,4 @@
-import React, { useState, useRef, MouseEvent, useEffect, useCallback } from 'react';
+import React, { useState, useRef, MouseEvent, useEffect, useCallback, useMemo } from 'react';
 import './App.css';
 
 // Define types
@@ -21,10 +21,8 @@ const calculatePolygonArea = (vertices: PixelCoord[]): number => {
 
 // Check if point is inside polygon using ray casting algorithm
 const isPointInPolygon = (point: PixelCoord, polygon: PixelCoord[]): boolean => {
-  console.log("isPointInPolygon: Checking point", point, "against polygon", polygon); // Log input
   let isInside = false;
   if (polygon.length < 3) {
-      console.log("isPointInPolygon: Polygon has less than 3 points.");
       return false; // Cannot be inside if polygon is not valid
   }
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -35,7 +33,6 @@ const isPointInPolygon = (point: PixelCoord, polygon: PixelCoord[]): boolean => 
     if (yj === yi) {
         // If point.y is the same as the horizontal line's y, check if point.x is between xi and xj
         if (point.y === yi && point.x >= Math.min(xi, xj) && point.x <= Math.max(xi, xj)) {
-            console.log(`isPointInPolygon: Point lies on horizontal edge ${i}-${j}. Considered inside (or on boundary).`);
             return true; // Point is on the boundary, consider it inside for simplicity here
         }
         // Otherwise, a horizontal line cannot intersect the ray cast horizontally from the point
@@ -49,7 +46,6 @@ const isPointInPolygon = (point: PixelCoord, polygon: PixelCoord[]): boolean => 
         isInside = !isInside;
     }
   }
-  console.log(`isPointInPolygon: Final result: ${isInside}`); // Log final result
   return isInside;
 };
 
@@ -66,6 +62,84 @@ const getPolygonBounds = (polygon: PixelCoord[]): Bounds => {
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 };
 
+// --- Sutherland-Hodgman Polygon Clipping ---
+
+// Calculates intersection of a line segment (p1, p2) with an infinite line
+// representing a clipping edge (vertical at x=coord or horizontal at y=coord).
+function intersectSH(p1: PixelCoord, p2: PixelCoord, edgeType: 'left' | 'right' | 'top' | 'bottom', coord: number): PixelCoord {
+    if (edgeType === 'left' || edgeType === 'right') { // Vertical clip edge at x = coord
+        const x = coord;
+        // Handle vertical subject edge (parallel to clip edge) - return an endpoint?
+        if (Math.abs(p2.x - p1.x) < 1e-9) {
+             // This case needs careful handling depending on exact requirements.
+             // Returning mid-point or an endpoint might be options.
+             // For simplicity, let's return a point on the edge.
+             return { x, y: p1.y };
+        }
+        const y = p1.y + (p2.y - p1.y) * (x - p1.x) / (p2.x - p1.x);
+        return { x, y };
+    } else { // Horizontal clip edge at y = coord
+        const y = coord;
+        // Handle horizontal subject edge (parallel to clip edge)
+        if (Math.abs(p2.y - p1.y) < 1e-9) {
+            return { x: p1.x, y };
+        }
+        const x = p1.x + (p2.x - p1.x) * (y - p1.y) / (p2.y - p1.y);
+        return { x, y };
+    }
+}
+
+// Clips the subject polygon against a single infinite line (clip edge).
+function clipPolygonAgainstEdgeSH(subjectPolygon: PixelCoord[], edgeType: 'left' | 'right' | 'top' | 'bottom', coord: number, insideCheck: (p: PixelCoord) => boolean): PixelCoord[] {
+    const outputList: PixelCoord[] = [];
+    if (subjectPolygon.length === 0) return [];
+
+    let prevPoint = subjectPolygon[subjectPolygon.length - 1];
+    let prevPointInside = insideCheck(prevPoint);
+
+    for (let i = 0; i < subjectPolygon.length; i++) {
+        const currentPoint = subjectPolygon[i];
+        const currentPointInside = insideCheck(currentPoint);
+
+        if (currentPointInside !== prevPointInside) { // Crossing
+            const intersection = intersectSH(prevPoint, currentPoint, edgeType, coord);
+            outputList.push(intersection);
+        }
+
+        if (currentPointInside) {
+            outputList.push(currentPoint);
+        }
+        prevPoint = currentPoint;
+        prevPointInside = currentPointInside;
+    }
+    return outputList;
+}
+
+// Clips the subject polygon against the four edges of a rectangular clip window.
+function clipPolygonSutherlandHodgman(subjectPolygon: PixelCoord[], clipBounds: Bounds): PixelCoord[] {
+    // Use a large epsilon for bounds checks to avoid floating point issues near boundaries
+    const epsilon = 1e-6;
+    if (!clipBounds || subjectPolygon.length < 3) return [];
+    let outputList = subjectPolygon;
+
+    const { x: minX, y: minY, width, height } = clipBounds;
+    // Handle potentially zero or negative width/height gracefully for clipping
+    const maxX = minX + Math.max(0, width);
+    const maxY = minY + Math.max(0, height);
+
+    // Clip against left edge (x = minX) -> Keep points with p.x >= minX
+    outputList = clipPolygonAgainstEdgeSH(outputList, 'left', minX, p => p.x >= minX - epsilon);
+    // Clip against right edge (x = maxX) -> Keep points with p.x <= maxX
+    outputList = clipPolygonAgainstEdgeSH(outputList, 'right', maxX, p => p.x <= maxX + epsilon);
+    // Clip against top edge (y = minY) -> Keep points with p.y >= minY (Y increases downwards)
+    outputList = clipPolygonAgainstEdgeSH(outputList, 'top', minY, p => p.y >= minY - epsilon);
+    // Clip against bottom edge (y = maxY) -> Keep points with p.y <= maxY
+    outputList = clipPolygonAgainstEdgeSH(outputList, 'bottom', maxY, p => p.y <= maxY + epsilon);
+
+    return outputList;
+}
+
+// --- End Sutherland-Hodgman ---
 
 function App() {
   const [initialSqM, setInitialSqM] = useState<number>(1264); // ~10000 sq ft in sq m
@@ -81,7 +155,6 @@ function App() {
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  // Canvas/SVG ref can be added here if needed for drawing
 
   // --- Mode Control Handlers ---
   const handleStartDefining = () => {
@@ -99,17 +172,14 @@ function App() {
       const area = calculatePolygonArea(polygonPoints);
       setDefinedPolygonAreaPixels(area);
       setPolygonBounds(getPolygonBounds(polygonPoints));
-      console.log(`Polygon defined with ${polygonPoints.length} points. Area: ${area.toFixed(2)} pixels^2`);
     } else {
-      console.warn("Polygon needs at least 3 points.");
-      // Reset if not enough points?
       setPolygonPoints([]);
       setDefinedPolygonAreaPixels(null);
       setPolygonBounds(null);
     }
   };
 
-   const handleResetPolygon = () => {
+  const handleResetPolygon = () => {
     setIsDefiningPolygon(false);
     setPolygonPoints([]);
     setSplitNaturalX(null);
@@ -122,19 +192,15 @@ function App() {
   const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
     const img = event.currentTarget;
     setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-    // Reset polygon state if image changes
     handleResetPolygon();
   };
 
-  const handleImageClick = (event: MouseEvent<HTMLDivElement | HTMLImageElement>) => { // Update type to include HTMLImageElement
+  const handleImageClick = (event: MouseEvent<HTMLDivElement | HTMLImageElement>) => {
     const targetElement = imageRef.current;
     if (!targetElement || !imageDimensions) {
-        console.log("handleImageClick: Aborted - no targetElement or imageDimensions");
         return;
     }
-    console.log("handleImageClick: Fired"); // Log start
 
-    // ... existing coordinate calculation ...
     const rect = targetElement.getBoundingClientRect();
     const displayedWidth = targetElement.clientWidth;
     const scaleX = imageDimensions.width / displayedWidth;
@@ -144,42 +210,25 @@ function App() {
     const naturalX = (event.clientX - rect.left) * scaleX;
     const naturalY = (event.clientY - rect.top) * scaleY;
     const clickPoint = { x: naturalX, y: naturalY };
-    console.log(`handleImageClick: Click Point (Natural): { x: ${naturalX.toFixed(2)}, y: ${naturalY.toFixed(2)} }`);
 
-
-    console.log(`handleImageClick: isDefiningPolygon = ${isDefiningPolygon}`); // Log state
     if (isDefiningPolygon) {
-      // Add vertex
-      console.log("handleImageClick: Adding polygon point.");
       setPolygonPoints(prevPoints => [...prevPoints, clickPoint]);
     } else {
-        console.log(`handleImageClick: Not defining polygon. Polygon points count: ${polygonPoints.length}`); // Log state
         if (polygonPoints.length >= 3) {
-            console.log("handleImageClick: Checking if point is in polygon...");
-            const isInside = isPointInPolygon(clickPoint, polygonPoints); // Call the updated function
-            console.log(`handleImageClick: isPointInPolygon result: ${isInside}`); // Log check result
+            const isInside = isPointInPolygon(clickPoint, polygonPoints);
 
-            // Set split line if click is inside the defined polygon
             if (isInside) {
-                console.log("handleImageClick: Point is inside. Setting split line."); // Re-enabled log message
                 const clampedNaturalX = Math.max(0, Math.min(naturalX, imageDimensions.width));
                 const clampedNaturalY = Math.max(0, Math.min(naturalY, imageDimensions.height));
 
-                // Re-enable state updates
                 if (splitDirection === 'vertical') {
-                    console.log(`handleImageClick: Setting vertical split to X = ${clampedNaturalX.toFixed(2)}`);
                     setSplitNaturalX(clampedNaturalX);
-                    setSplitNaturalY(null); // Clear the other direction
+                    setSplitNaturalY(null);
                 } else {
-                    console.log(`handleImageClick: Setting horizontal split to Y = ${clampedNaturalY.toFixed(2)}`);
                     setSplitNaturalY(clampedNaturalY);
-                    setSplitNaturalX(null); // Clear the other direction
+                    setSplitNaturalX(null);
                 }
-            } else {
-                console.log("handleImageClick: Click is outside the defined polygon. Split line not changed.");
             }
-        } else {
-            console.log("handleImageClick: Not enough polygon points to set split line.");
         }
     }
   };
@@ -190,52 +239,64 @@ function App() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setImageSrc(reader.result as string);
-        // Reset everything related to polygon and split
         handleResetPolygon();
-        setImageDimensions(null); // Will trigger reload and reset via handleImageLoad
+        setImageDimensions(null);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // --- Area Calculation ---
-  const calculateAreas = () => {
+  // --- Area Calculation (Revised) ---
+  const calculateAreas = useCallback((imgDims: { width: number; height: number } | null) => {
     const isSplitDefined = splitNaturalX !== null || splitNaturalY !== null;
-    if (!isSplitDefined || polygonPoints.length < 3 || initialSqM <= 0 || !polygonBounds) {
-      return { area1: 0, area2: 0, label1: 'Area 1', label2: 'Area 2' }; // Use generic labels initially
+    if (!isSplitDefined || polygonPoints.length < 3 || initialSqM <= 0 || !imgDims) {
+      return { area1: 0, area2: 0, label1: 'Area 1', label2: 'Area 2', subPoly1: [], subPoly2: [] };
     }
 
-    let ratio: number;
-    let label1: string;
-    let label2: string;
+    let clipBounds1: Bounds = null;
+    let clipBounds2: Bounds = null;
+    let label1: string = 'Area 1';
+    let label2: string = 'Area 2';
 
     if (splitDirection === 'vertical' && splitNaturalX !== null) {
-        // --- Simple Bounding Box Ratio Method (Vertical Split) ---
-        const relativeSplitX = splitNaturalX - polygonBounds.x;
-        const clampedRelativeSplitX = Math.max(0, Math.min(relativeSplitX, polygonBounds.width));
-        ratio = polygonBounds.width > 0 ? clampedRelativeSplitX / polygonBounds.width : 0;
+        const splitX = splitNaturalX;
+        clipBounds1 = { x: 0, y: 0, width: splitX, height: imgDims.height };
+        clipBounds2 = { x: splitX, y: 0, width: imgDims.width - splitX, height: imgDims.height };
         label1 = 'Left Area';
         label2 = 'Right Area';
     } else if (splitDirection === 'horizontal' && splitNaturalY !== null) {
-        // --- Simple Bounding Box Ratio Method (Horizontal Split) ---
-        const relativeSplitY = splitNaturalY - polygonBounds.y;
-        const clampedRelativeSplitY = Math.max(0, Math.min(relativeSplitY, polygonBounds.height));
-        ratio = polygonBounds.height > 0 ? clampedRelativeSplitY / polygonBounds.height : 0;
+        const splitY = splitNaturalY;
+        clipBounds1 = { x: 0, y: 0, width: imgDims.width, height: splitY };
+        clipBounds2 = { x: 0, y: splitY, width: imgDims.width, height: imgDims.height - splitY };
         label1 = 'Top Area';
         label2 = 'Bottom Area';
     } else {
-        // Should not happen if isSplitDefined is true, but handle defensively
-        return { area1: 0, area2: 0, label1: 'Area 1', label2: 'Area 2' };
+        return { area1: 0, area2: 0, label1: 'Area 1', label2: 'Area 2', subPoly1: [], subPoly2: [] };
     }
 
-    // Distribute initialSqM based on the calculated ratio
-    const area1 = initialSqM * ratio;
-    const area2 = initialSqM * (1 - ratio);
+    const subPolygon1 = clipPolygonSutherlandHodgman(polygonPoints, clipBounds1);
+    const subPolygon2 = clipPolygonSutherlandHodgman(polygonPoints, clipBounds2);
 
-    return { area1, area2, label1, label2 };
-  };
+    const area1_pixels = calculatePolygonArea(subPolygon1);
+    const area2_pixels = calculatePolygonArea(subPolygon2);
+    const total_pixels = area1_pixels + area2_pixels;
 
-  const { area1, area2, label1, label2 } = calculateAreas();
+    let ratio: number = 0;
+    if (total_pixels > 1e-6) {
+        ratio = area1_pixels / total_pixels;
+    } else if (area1_pixels > 1e-6) {
+        ratio = 1.0;
+    } else {
+        ratio = 0.0;
+    }
+
+    const area1_sqm = initialSqM * ratio;
+    const area2_sqm = initialSqM * (1 - ratio);
+
+    return { area1: area1_sqm, area2: area2_sqm, label1, label2, subPoly1: subPolygon1, subPoly2: subPolygon2 };
+  }, [polygonPoints, initialSqM, splitDirection, splitNaturalX, splitNaturalY]);
+
+  const { area1, area2, label1, label2 } = useMemo(() => calculateAreas(imageDimensions), [calculateAreas, imageDimensions]);
 
   // --- Display Calculations ---
   const getDisplaySplitX = () => {
@@ -265,7 +326,6 @@ function App() {
   const isSplitActive = (splitDirection === 'vertical' && displaySplitX !== null) ||
                         (splitDirection === 'horizontal' && displaySplitY !== null);
 
-  // Convert natural polygon points to display coordinates for rendering
   const getDisplayPolygonPoints = (): string => {
       if (!imageRef.current || !imageDimensions || polygonPoints.length === 0) return "";
       const scaleX = imageRef.current.clientWidth / imageDimensions.width;
@@ -274,15 +334,8 @@ function App() {
   };
   const displayPolygonPointsStr = getDisplayPolygonPoints();
 
-  // Add a simple logger for the container click
-  const handleContainerClick = (event: MouseEvent<HTMLDivElement>) => {
-      console.log("Container Clicked!", event.target);
-  };
-
-  // --- New Handler for Split Direction Change ---
   const handleChangeSplitDirection = (newDirection: SplitDirection) => {
     setSplitDirection(newDirection);
-    // Reset split coordinates when direction changes
     setSplitNaturalX(null);
     setSplitNaturalY(null);
   };
@@ -327,7 +380,7 @@ function App() {
               name="splitDirection"
               value="vertical"
               checked={splitDirection === 'vertical'}
-              onChange={() => handleChangeSplitDirection('vertical')} // Use new handler
+              onChange={() => handleChangeSplitDirection('vertical')}
             /> Vertical
           </label>
           <label>
@@ -336,7 +389,7 @@ function App() {
               name="splitDirection"
               value="horizontal"
               checked={splitDirection === 'horizontal'}
-              onChange={() => handleChangeSplitDirection('horizontal')} // Use new handler
+              onChange={() => handleChangeSplitDirection('horizontal')}
             /> Horizontal
           </label>
           <p>Click inside the polygon to set the {splitDirection} split line.</p>
@@ -348,11 +401,10 @@ function App() {
           <div
             ref={imageContainerRef}
             className="image-container"
-            onClick={handleContainerClick} // Add logger here
             style={{
               position: 'relative',
               display: 'inline-block',
-              border: '1px solid red' // Add border for visual debugging
+              border: '1px solid red'
             }}
           >
             <img
@@ -361,7 +413,7 @@ function App() {
               alt="Parcel"
               onLoad={handleImageLoad}
               className="parcel-image"
-              onClick={handleImageClick} // This is the main handler
+              onClick={handleImageClick}
               style={{
                 cursor: isDefiningPolygon ? 'crosshair' : (polygonPoints.length >= 3 ? 'crosshair' : 'default'),
                 display: 'block',
@@ -370,7 +422,6 @@ function App() {
                 userSelect: 'none'
               }}
             />
-            {/* SVG Overlay for drawing polygon and split line */}
             <svg
               style={{
                 position: 'absolute',
@@ -378,12 +429,11 @@ function App() {
                 left: 0,
                 width: '100%',
                 height: '100%',
-                pointerEvents: 'none' // Allow clicks to pass through to the image
+                pointerEvents: 'none'
               }}
               viewBox={`0 0 ${imageRef.current?.clientWidth ?? 0} ${imageRef.current?.clientHeight ?? 0}`}
-              preserveAspectRatio="none" // Ensure SVG scales with image container
+              preserveAspectRatio="none"
             >
-              {/* Define Clip Paths for Split Areas */}
               <defs>
                 {isSplitActive && imageRef.current && (
                   <>
@@ -405,28 +455,25 @@ function App() {
                 )}
               </defs>
 
-              {/* Draw polygon fill(s) */}
               {polygonPoints.length >= 3 && displayPolygonPointsStr && (
                 <>
                   {!isSplitActive ? (
-                    // Default single fill when no split is active
                     <polygon
                       points={displayPolygonPointsStr}
-                      fill="rgba(0, 255, 0, 0.2)" // Semi-transparent green fill
-                      stroke="none" // Stroke is handled by the outline polygon below
+                      fill="rgba(0, 255, 0, 0.2)"
+                      stroke="none"
                     />
                   ) : (
-                    // Two filled polygons using clip paths when split is active
                     <>
                       <polygon
                         points={displayPolygonPointsStr}
-                        fill="rgba(0, 255, 0, 0.3)" // Color for area 1
+                        fill="rgba(0, 255, 0, 0.3)"
                         clipPath="url(#clip-area1)"
                         stroke="none"
                       />
                       <polygon
                         points={displayPolygonPointsStr}
-                        fill="rgba(255, 0, 0, 0.3)" // Color for area 2
+                        fill="rgba(255, 0, 0, 0.3)"
                         clipPath="url(#clip-area2)"
                         stroke="none"
                       />
@@ -435,16 +482,14 @@ function App() {
                 </>
               )}
 
-              {/* Draw polygon outline using polygon */}
               {polygonPoints.length >= 3 && displayPolygonPointsStr && (
-                <polygon // Changed from polyline to polygon
+                <polygon
                   points={displayPolygonPointsStr}
-                  fill="none" // Outline only
+                  fill="none"
                   stroke="lime"
                   strokeWidth="2"
                 />
               )}
-              {/* Draw closing line if defining */}
               {isDefiningPolygon && polygonPoints.length > 2 && (
                 <line
                   x1={polygonPoints[polygonPoints.length - 1].x * (imageRef.current?.clientWidth ?? 0) / (imageDimensions?.width ?? 1)}
@@ -453,10 +498,9 @@ function App() {
                   y2={polygonPoints[0].y * (imageRef.current?.clientHeight ?? 0) / (imageDimensions?.height ?? 1)}
                   stroke="lime"
                   strokeWidth="1"
-                  strokeDasharray="4 2" // Dashed line for closing segment during definition
+                  strokeDasharray="4 2"
                 />
               )}
-              {/* Draw vertices */}
               {polygonPoints.map((p, index) => {
                 const scaleX = (imageRef.current?.clientWidth ?? 0) / (imageDimensions?.width ?? 1);
                 const scaleY = (imageRef.current?.clientHeight ?? 0) / (imageDimensions?.height ?? 1);
@@ -465,19 +509,18 @@ function App() {
                     key={index}
                     cx={p.x * scaleX}
                     cy={p.y * scaleY}
-                    r="3" // Radius of vertex circle
+                    r="3"
                     fill="red"
                   />
                 );
               })}
 
-              {/* Draw split line (conditionally vertical or horizontal) */}
               {splitDirection === 'vertical' && displaySplitX !== null && (
                 <line
                   x1={displaySplitX}
                   y1="0"
                   x2={displaySplitX}
-                  y2="100%" // Use percentage for full height/width
+                  y2="100%"
                   stroke="blue"
                   strokeWidth="2"
                 />
@@ -486,7 +529,7 @@ function App() {
                  <line
                   x1="0"
                   y1={displaySplitY}
-                  x2="100%" // Use percentage for full height/width
+                  x2="100%"
                   y2={displaySplitY}
                   stroke="blue"
                   strokeWidth="2"
@@ -496,21 +539,23 @@ function App() {
           </div>
         )}
 
-        {/* Results display: Show when polygon is defined */}
         {polygonPoints.length >= 3 && !isDefiningPolygon && (
           <div className="results" style={{ minWidth: '200px', padding: '10px' }}>
             <h2>{isSplitActive ? `Split Results (${splitDirection})` : 'Area Information'}</h2>
             {isSplitActive ? (
               <>
-                <p>{label1}: {area1.toFixed(2)} sq m ({initialSqM > 0 ? ((area1 / initialSqM) * 100).toFixed(1) : 0}%)</p>
-                <p>{label2}: {area2.toFixed(2)} sq m ({initialSqM > 0 ? ((area2 / initialSqM) * 100).toFixed(1) : 0}%)</p>
+                <p>{label1}: {area1.toFixed(2)} sq m ({initialSqM > 0 && (area1 + area2) > 1e-6 ? ((area1 / (area1+area2)) * 100).toFixed(1) : 0}%)</p>
+                <p>{label2}: {area2.toFixed(2)} sq m ({initialSqM > 0 && (area1 + area2) > 1e-6 ? ((area2 / (area1+area2)) * 100).toFixed(1) : 0}%)</p>
+                {(area1 + area2 > 0) && Math.abs((area1 + area2) - initialSqM) > 0.01 &&
+                    <p style={{fontSize: '0.8em', color: 'orange'}}>Note: Total split area ({ (area1 + area2).toFixed(2) }) differs slightly from initial input due to calculation precision.</p>
+                }
               </>
             ) : (
               <p>No split defined yet. Click inside the polygon to create a split.</p>
             )}
-            <p>Total Defined Area: {initialSqM.toFixed(2)} sq m</p>
+            <p>Total Defined Area Input: {initialSqM.toFixed(2)} sq m</p>
             {definedPolygonAreaPixels !== null && (
-                 <p style={{fontSize: '0.8em', color: '#666'}}>(Polygon Area in Pixels: {definedPolygonAreaPixels.toFixed(0)})</p>
+                 <p style={{fontSize: '0.8em', color: '#666'}}>(Original Polygon Area in Pixels: {definedPolygonAreaPixels.toFixed(0)})</p>
             )}
           </div>
         )}
