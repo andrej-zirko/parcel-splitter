@@ -1,0 +1,81 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.App {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem; /* Add some spacing between elements */
+}
+
+.controls {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap; /* Allow controls to wrap on smaller screens */
+  justify-content: center;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column; /* Stack label text above input */
+  align-items: flex-start; /* Align label text to the left */
+  gap: 0.25rem;
+}
+
+.controls input[type="number"],
+.controls input[type="file"] {
+  padding: 0.5em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.image-container {
+  position: relative; /* Needed for absolute positioning of the split line */
+  display: inline-block; /* Fit container to image size */
+  border: 1px solid #ccc; /* Optional: visualize container */
+  line-height: 0; /* Prevent extra space below image */
+  max-width: 100%; /* Constrain image size */
+  max-height: 70vh; /* Limit max height */
+  overflow: hidden; /* Ensure line doesn't go outside if image scales */
+}
+
+.parcel-image {
+  display: block; /* Remove extra space below image */
+  max-width: 100%; /* Make image responsive */
+  max-height: 70vh; /* Corresponds to container max height */
+  height: auto; /* Maintain aspect ratio */
+  user-select: none; /* Prevent image selection when clicking */
+  -webkit-user-drag: none; /* Prevent image dragging */
+}
+
+.split-line {
+  position: absolute;
+  top: 0;
+  bottom: 0; /* Make line full height */
+  width: 2px; /* Line thickness */
+  background-color: red;
+  pointer-events: none; /* Prevent line from interfering with clicks */
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.5); /* Optional: make line more visible */
+}
+
+.results {
+  margin-top: 20px;
+  padding: 1em;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background-color: #2a2a2a;
+  text-align: left;
+  color: #ffffff;
+}
+
+.results h2 {
+  margin-top: 0;
+  text-align: center;
+  color: #ffffff;
+}
