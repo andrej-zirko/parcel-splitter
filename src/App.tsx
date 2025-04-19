@@ -262,6 +262,8 @@ function App() {
 
   const displaySplitX = getDisplaySplitX();
   const displaySplitY = getDisplaySplitY();
+  const isSplitActive = (splitDirection === 'vertical' && displaySplitX !== null) ||
+                        (splitDirection === 'horizontal' && displaySplitY !== null);
 
   // Convert natural polygon points to display coordinates for rendering
   const getDisplayPolygonPoints = (): string => {
@@ -275,6 +277,14 @@ function App() {
   // Add a simple logger for the container click
   const handleContainerClick = (event: MouseEvent<HTMLDivElement>) => {
       console.log("Container Clicked!", event.target);
+  };
+
+  // --- New Handler for Split Direction Change ---
+  const handleChangeSplitDirection = (newDirection: SplitDirection) => {
+    setSplitDirection(newDirection);
+    // Reset split coordinates when direction changes
+    setSplitNaturalX(null);
+    setSplitNaturalY(null);
   };
 
   return (
@@ -317,7 +327,7 @@ function App() {
               name="splitDirection"
               value="vertical"
               checked={splitDirection === 'vertical'}
-              onChange={() => setSplitDirection('vertical')}
+              onChange={() => handleChangeSplitDirection('vertical')} // Use new handler
             /> Vertical
           </label>
           <label>
@@ -326,7 +336,7 @@ function App() {
               name="splitDirection"
               value="horizontal"
               checked={splitDirection === 'horizontal'}
-              onChange={() => setSplitDirection('horizontal')}
+              onChange={() => handleChangeSplitDirection('horizontal')} // Use new handler
             /> Horizontal
           </label>
           <p>Click inside the polygon to set the {splitDirection} split line.</p>
@@ -373,11 +383,63 @@ function App() {
               viewBox={`0 0 ${imageRef.current?.clientWidth ?? 0} ${imageRef.current?.clientHeight ?? 0}`}
               preserveAspectRatio="none" // Ensure SVG scales with image container
             >
-              {/* Draw polygon lines */}
-              {polygonPoints.length > 1 && (
-                <polyline
+              {/* Define Clip Paths for Split Areas */}
+              <defs>
+                {isSplitActive && imageRef.current && (
+                  <>
+                    <clipPath id="clip-area1">
+                      {splitDirection === 'vertical' && displaySplitX !== null ? (
+                        <rect x="0" y="0" width={displaySplitX} height={imageRef.current.clientHeight} />
+                      ) : (splitDirection === 'horizontal' && displaySplitY !== null &&
+                        <rect x="0" y="0" width={imageRef.current.clientWidth} height={displaySplitY} />
+                      )}
+                    </clipPath>
+                    <clipPath id="clip-area2">
+                      {splitDirection === 'vertical' && displaySplitX !== null ? (
+                        <rect x={displaySplitX} y="0" width={(imageRef.current.clientWidth ?? 0) - displaySplitX} height={imageRef.current.clientHeight} />
+                      ) : (splitDirection === 'horizontal' && displaySplitY !== null &&
+                        <rect x="0" y={displaySplitY} width={imageRef.current.clientWidth} height={(imageRef.current.clientHeight ?? 0) - displaySplitY} />
+                      )}
+                    </clipPath>
+                  </>
+                )}
+              </defs>
+
+              {/* Draw polygon fill(s) */}
+              {polygonPoints.length >= 3 && displayPolygonPointsStr && (
+                <>
+                  {!isSplitActive ? (
+                    // Default single fill when no split is active
+                    <polygon
+                      points={displayPolygonPointsStr}
+                      fill="rgba(0, 255, 0, 0.2)" // Semi-transparent green fill
+                      stroke="none" // Stroke is handled by the outline polygon below
+                    />
+                  ) : (
+                    // Two filled polygons using clip paths when split is active
+                    <>
+                      <polygon
+                        points={displayPolygonPointsStr}
+                        fill="rgba(0, 255, 0, 0.3)" // Color for area 1
+                        clipPath="url(#clip-area1)"
+                        stroke="none"
+                      />
+                      <polygon
+                        points={displayPolygonPointsStr}
+                        fill="rgba(255, 0, 0, 0.3)" // Color for area 2
+                        clipPath="url(#clip-area2)"
+                        stroke="none"
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* Draw polygon outline using polygon */}
+              {polygonPoints.length >= 3 && displayPolygonPointsStr && (
+                <polygon // Changed from polyline to polygon
                   points={displayPolygonPointsStr}
-                  fill="rgba(0, 255, 0, 0.2)" // Semi-transparent green fill
+                  fill="none" // Outline only
                   stroke="lime"
                   strokeWidth="2"
                 />
@@ -435,7 +497,7 @@ function App() {
         )}
 
         {/* Results display moved to the right */}
-        {(splitNaturalX !== null || splitNaturalY !== null) && definedPolygonAreaPixels !== null && polygonPoints.length >= 3 && (
+        {isSplitActive && definedPolygonAreaPixels !== null && polygonPoints.length >= 3 && (
           <div className="results" style={{ minWidth: '200px', padding: '10px' }}>
             <h2>Split Results ({splitDirection})</h2>
             <p>{label1}: {area1.toFixed(2)} sq m ({((area1 / initialSqM) * 100).toFixed(1)}%)</p>
