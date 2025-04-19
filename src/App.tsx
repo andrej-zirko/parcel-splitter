@@ -143,7 +143,9 @@ function clipPolygonSutherlandHodgman(subjectPolygon: PixelCoord[], clipBounds: 
 
 function App() {
   const [initialSqM, setInitialSqM] = useState<number>(1264); // ~10000 sq ft in sq m
+  const [initialSqMError, setInitialSqMError] = useState<string>(''); // New state for input error
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string>(''); // New state for image errors
   const [splitNaturalX, setSplitNaturalX] = useState<number | null>(null); // Vertical split line X coord (natural)
   const [splitNaturalY, setSplitNaturalY] = useState<number | null>(null); // Horizontal split line Y coord (natural)
   const [splitDirection, setSplitDirection] = useState<SplitDirection>('vertical'); // Split direction
@@ -188,10 +190,28 @@ function App() {
     setPolygonBounds(null);
   };
 
+  const handleUndoPoint = () => {
+    if (isDefiningPolygon && polygonPoints.length > 0) {
+      setPolygonPoints(prevPoints => prevPoints.slice(0, -1));
+      if (polygonPoints.length <= 3) {
+        setDefinedPolygonAreaPixels(null);
+        setPolygonBounds(null);
+      }
+    }
+  };
+
   // --- Image and Click Handlers ---
   const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
     const img = event.currentTarget;
     setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+    setImageError(''); // Clear error on successful load
+    handleResetPolygon();
+  };
+
+  const handleImageError = () => {
+    setImageError('Failed to load image. Please try a different file or check the file format.');
+    setImageSrc(null);
+    setImageDimensions(null);
     handleResetPolygon();
   };
 
@@ -235,21 +255,43 @@ function App() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    setImageError(''); // Clear previous errors
     if (file) {
+      // Basic file type check
+      if (!file.type.startsWith('image/')) {
+          setImageError('Invalid file type. Please upload an image file (e.g., JPG, PNG, GIF).');
+          setImageSrc(null);
+          setImageDimensions(null);
+          handleResetPolygon();
+          event.target.value = ''; // Reset file input
+          return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setImageSrc(reader.result as string);
         handleResetPolygon();
-        setImageDimensions(null);
+        setImageDimensions(null); // Reset dimensions until image loads
+      };
+      reader.onerror = () => {
+          setImageError('Error reading file.');
+          setImageSrc(null);
+          setImageDimensions(null);
+          handleResetPolygon();
       };
       reader.readAsDataURL(file);
+    } else {
+        // Handle case where user cancels file selection
+        // No explicit error needed, just ensure state is clean if needed
     }
   };
 
   // --- Area Calculation (Revised) ---
   const calculateAreas = useCallback((imgDims: { width: number; height: number } | null) => {
+    // Ensure initialSqM is positive for calculation
+    const validInitialSqM = Math.max(0, initialSqM);
     const isSplitDefined = splitNaturalX !== null || splitNaturalY !== null;
-    if (!isSplitDefined || polygonPoints.length < 3 || initialSqM <= 0 || !imgDims) {
+    if (!isSplitDefined || polygonPoints.length < 3 || validInitialSqM <= 0 || !imgDims) {
       return { area1: 0, area2: 0, label1: 'Area 1', label2: 'Area 2', subPoly1: [], subPoly2: [] };
     }
 
@@ -290,8 +332,8 @@ function App() {
         ratio = 0.0;
     }
 
-    const area1_sqm = initialSqM * ratio;
-    const area2_sqm = initialSqM * (1 - ratio);
+    const area1_sqm = validInitialSqM * ratio;
+    const area2_sqm = validInitialSqM * (1 - ratio);
 
     return { area1: area1_sqm, area2: area2_sqm, label1, label2, subPoly1: subPolygon1, subPoly2: subPolygon2 };
   }, [polygonPoints, initialSqM, splitDirection, splitNaturalX, splitNaturalY]);
@@ -340,6 +382,18 @@ function App() {
     setSplitNaturalY(null);
   };
 
+  const handleInitialSqMChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      const numValue = Number(value);
+      if (value === '' || (numValue > 0 && !isNaN(numValue))) {
+          setInitialSqM(numValue);
+          setInitialSqMError('');
+      } else if (numValue <= 0 || isNaN(numValue)) {
+          setInitialSqMError('Please enter a positive number for square meters.');
+          setInitialSqM(0);
+      }
+  };
+
   return (
     <div className="App">
       <h1>Parcel Splitter</h1>
@@ -348,19 +402,26 @@ function App() {
           Initial Square Meters (of defined area):
           <input
             type="number"
-            value={initialSqM}
-            onChange={(e) => setInitialSqM(Number(e.target.value))}
+            value={initialSqM === 0 && initialSqMError ? '' : initialSqM}
+            onChange={handleInitialSqMChange}
             min="1"
+            aria-invalid={!!initialSqMError}
+            aria-describedby="sqm-error"
           />
         </label>
+        {initialSqMError && <p id="sqm-error" style={{ color: 'red', fontSize: '0.8em' }}>{initialSqMError}</p>}
         <label>
           Upload Parcel Image:
           <input type="file" accept="image/*" onChange={handleFileChange} />
         </label>
+        {imageError && <p style={{ color: 'red', fontSize: '0.8em' }}>{imageError}</p>}
       </div>
       <div className="controls polygon-controls">
         <button onClick={handleStartDefining} disabled={!imageSrc || isDefiningPolygon}>
           Start/Add Point
+        </button>
+        <button onClick={handleUndoPoint} disabled={!isDefiningPolygon || polygonPoints.length === 0}>
+          Undo Last Point
         </button>
         <button onClick={handleFinishDefining} disabled={!isDefiningPolygon || polygonPoints.length < 3}>
           Finish Polygon
@@ -397,7 +458,7 @@ function App() {
       )}
 
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-        {imageSrc && (
+        {imageSrc && !imageError && (
           <div
             ref={imageContainerRef}
             className="image-container"
@@ -412,6 +473,7 @@ function App() {
               src={imageSrc}
               alt="Parcel"
               onLoad={handleImageLoad}
+              onError={handleImageError}
               className="parcel-image"
               onClick={handleImageClick}
               style={{
@@ -538,6 +600,11 @@ function App() {
             </svg>
           </div>
         )}
+        {imageError && !imageSrc && (
+          <div className="image-container" style={{ border: '1px dashed red', padding: '20px', textAlign: 'center' }}>
+            <p style={{ color: 'red' }}>{imageError}</p>
+          </div>
+        )}
 
         {polygonPoints.length >= 3 && !isDefiningPolygon && (
           <div className="results" style={{ minWidth: '200px', padding: '10px' }}>
@@ -553,7 +620,7 @@ function App() {
             ) : (
               <p>No split defined yet. Click inside the polygon to create a split.</p>
             )}
-            <p>Total Defined Area Input: {initialSqM.toFixed(2)} sq m</p>
+            <p>Total Defined Area Input: {initialSqM > 0 ? initialSqM.toFixed(2) : '0.00'} sq m</p>
             {definedPolygonAreaPixels !== null && (
                  <p style={{fontSize: '0.8em', color: '#666'}}>(Original Polygon Area in Pixels: {definedPolygonAreaPixels.toFixed(0)})</p>
             )}
