@@ -672,6 +672,7 @@ function App() {
         <p>This tool is provided free of charge and "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
         <p>The calculations performed by this tool are for informational purposes only. We make no guarantees regarding the accuracy or reliability of the results.</p>
         <p>In no event shall the creators or operators of this website be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.</p>
+        <p>For feedback or questions, please contact: <a href="mailto:andrej+parcel@zirko.eu">andrej+parcel@zirko.eu</a></p>
         <p>By using this tool, you agree to these terms.</p>
       </div>
     </div>
