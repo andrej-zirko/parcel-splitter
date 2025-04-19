@@ -457,15 +457,23 @@ function App() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+      {/* Main content area: Image + Results */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap', // Allow items to wrap to the next line
+        gap: '20px',      // Space between items
+        alignItems: 'flex-start' // Align items to the top
+      }}>
         {imageSrc && !imageError && (
           <div
             ref={imageContainerRef}
             className="image-container"
             style={{
               position: 'relative',
-              display: 'inline-block',
-              border: '1px solid red'
+              border: '1px solid grey', // Changed border color slightly
+              flex: '1 1 60%', // Allow growing/shrinking, base width 60%
+              minWidth: '300px', // Ensure it doesn't get too small
+              maxWidth: '800px' // Optional: Limit max width
             }}
           >
             <img
@@ -600,14 +608,18 @@ function App() {
             </svg>
           </div>
         )}
-        {imageError && !imageSrc && (
-          <div className="image-container" style={{ border: '1px dashed red', padding: '20px', textAlign: 'center' }}>
-            <p style={{ color: 'red' }}>{imageError}</p>
-          </div>
-        )}
 
         {polygonPoints.length >= 3 && !isDefiningPolygon && (
-          <div className="results" style={{ minWidth: '200px', padding: '10px' }}>
+          <div
+            className="results"
+            style={{
+              flex: '1 1 35%', // Allow growing/shrinking, base width 35%
+              minWidth: '250px', // Ensure it has a minimum width
+              padding: '10px',
+              border: '1px solid #eee', // Add a light border for visual separation
+              borderRadius: '4px'
+             }}
+          >
             <h2>{isSplitActive ? `Split Results (${splitDirection})` : 'Area Information'}</h2>
             {isSplitActive ? (
               <>
